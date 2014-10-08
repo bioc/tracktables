@@ -1,0 +1,29 @@
+h2{
+	color: rgb(30,20,0);
+	text-align: center;
+	font-size: 50;
+	border-bottom: solid;
+	border-bottom-color: rgb(33,103,126);
+	border-width: 5;
+	/*!background-color:rgb(208,201,194); !*/
+}
+#tttext{
+  margin-left: 5%;
+	margin-right: 5%;
+	/*!border-left: solid;
+	/*!border-left-color: rgb(33,103,126);
+	/*!background-color:rgb(208,201,194); !*/
+}
+#demo{
+	margin-left: 10%;
+	margin-right: 10%;
+	/*!border-left: solid;
+	/*!border-left-color: rgb(33,103,126);
+	/*!background-color:rgb(208,201,194); !*/
+}
+a.table:link {color:rgb(0,105,131);text-decoration:none;font-size:130%}
+a.table:visited {color:rgb(0,105,131);text-decoration:none;font-size:130%}
+a.table:hover {color:rgb(131,0,81);text-decoration:none;font-size:150%}
+
+a.main:link {color:rgb(0,105,131);text-decoration:none;font-size:150%;}
+a.main:hover {color:rgb(131,0,81);text-decoration:none;font-size:170%;}

@@ -1,0 +1,170 @@
+%\VignetteIndexEntry{Creating IGV HTML reports with tracktables}
+%\VignettePackage{tracktables}
+%\VignetteEngine{knitr::knitr}
+
+% To compile this document
+% library('knitr'); rm(list=ls()); knit('tracktables.Rnw')
+
+\documentclass[12pt]{article}
+
+
+<<knitr, echo=FALSE, results="hide">>=
+library("knitr")
+opts_chunk$set(tidy=FALSE,dev="png",fig.show="hide",
+               fig.width=4,fig.height=4.5,
+               message=FALSE)
+@ 
+
+<<style, eval=TRUE, echo=FALSE, results="asis">>=
+BiocStyle::latex()
+@
+
+
+\author{Thomas Carroll$^{1*}$\\[1em] \small{$^{1}$ Bioinformatics Core, MRC Clinical Sciences Centre;} \\ \small{\texttt{$^*$thomas.carroll (at)imperial.ac.uk}}}
+
+\title{Creating IGV HTML reports with tracktables}
+
+\begin{document}
+
+<<include=FALSE>>=
+library(knitr)
+opts_chunk$set(
+concordance=TRUE
+)
+@
+
+
+\maketitle
+
+
+<<options, results="hide", echo=FALSE>>=
+options(digits=3, width=80, prompt=" ", continue=" ")
+@
+
+\tableofcontents
+
+\section{The tracktables package}
+
+ Visualising genomics data in genome browsers is a key step in both quality control and the initial interrogation of any hypothesis under investigation. 
+
+ The organisation of large collections of genomics data (such as from large scale high-thoughput sequencing experiments) alongside their associated sample or experimental metadata allows for the rapid evaluation of patterns across experimental groups. 
+
+  Broad's Intergrative Genome Viewer (IGV) provides a set of methods to make use of sample metadata when visualising genomics data. As well as identifying sample metadata within the genome browser, this sample information can be used in IGV to group, sort and filter samples.
+  
+  This use of sample metadata, alongside the ability to control IGV through ports, provides the desired framework to rapidly interrogate large cohorts of genomics data once the appropriate file structure is built.
+  
+ The Tracktables package provides a set of tools to build IGV session files from data-frames of sample files and their associated metadata as well as produce IGV linked HTML reports for high-throughput visualisation of sample data in IGV.
+
+\section{Creating IGV sessions and HTML reports using tracktables}
+
+The two main functions within the \texttt{tracktables} package are the \Rfunction{MakeIGVSession()} function for  creating IGV session XMLs and any associated sample metadata files and the \Rfunction{maketracktable()} function to create HTML pages containing the sample metadata and interval tables used to control IGV.
+
+\subsection{Creating input files for tracktables}
+
+\texttt{tracktables} functions require the user to provide both a data-frame of metadata information and a data-frame of the paths of sample files to be visualised in IGV. 
+
+These data-frames must both have one column named "SampleName" which contains unique sample IDs. This column will be used to match samples and only samples within both files will be included in the IGV session.
+
+The remaining metadata SampleSheet columns may be user-defined but must all contain column titles. (See example below)
+
+The FileSheet (with file paths) must contain the columns "SampleName", "bam","bigwig" and "interval". These columns may contain NA values when no relavant file is associated to a sample.
+
+Here we create a small example SampleSheet (containing metadata) and FileSheet (containing file locations) from some example histone mark, RNA polymerase 2 and Ebf ChIP-seq.
+
+
+<<inputdata, eval=TRUE>>=
+library(tracktables)
+fileLocations <- system.file("extdata",package="tracktables")
+
+bigwigs <- dir(fileLocations,pattern="*.bw",full.names=TRUE)
+intervals <- dir(fileLocations,pattern="*.bed",full.names=TRUE)
+bigWigMat <- cbind(gsub("_Example.bw","",basename(bigwigs)),
+                   bigwigs)
+intervalsMat <- cbind(gsub("_Peaks.bed","",basename(intervals)),
+                      intervals)
+
+FileSheet <- merge(bigWigMat,intervalsMat,all=TRUE)
+FileSheet <- as.matrix(cbind(FileSheet,NA))
+colnames(FileSheet) <- c("SampleName","bigwig","interval","bam")
+
+SampleSheet <- cbind(as.vector(FileSheet[,"SampleName"]),
+                     c("EBF","H3K4me3","H3K9ac","RNAPol2"),
+                     c("ProB","ProB","ProB","ProB"))
+colnames(SampleSheet) <- c("SampleName","Antibody","Species")
+
+@
+
+The SampleSheet contains a small section of metadata for the EBF, RNApol2, H3K4me3 and H3K9ac ChIP. The "SampleName" column contains the unique IDs.
+
+<<head_samplesheet, eval=TRUE>>=
+head(SampleSheet)
+@
+
+The FileSheet contains the "SampleName" column with unique IDs matching those founds in the SampleSheet. The remaining columns are "bam","bigwig" and "interval" and list the full paths of relevant files to be displayed in IGV.
+<<head_filesheet, eval=FALSE>>=
+head(FileSheet)
+@
+
+<<Filesheet, eval=TRUE,echo=FALSE>>=
+FileSheetEdited <- FileSheet
+FileSheetEdited[,2] <- file.path("pathTo",basename(FileSheetEdited[,2]))
+FileSheetEdited[1,3] <- file.path("pathTo",basename(FileSheetEdited[1,3]))
+head(FileSheetEdited)
+@
+
+Note that not all samples have intervals associated to them and ,here, none of these samples have BAM files associated to them. NA values within the FileSheet will be ignored by \texttt{tracktables} functions.
+
+\subsection{Creating an IGV session XML file}
+
+\texttt{tracktables} can create an IGV session XML and associated sample information file from this SampleSheet and FileSheet.
+
+In addition to the FileSheet and SampleSheet, the \Rfunction{MakeIGVSession()} function requires the location to write to, the filename for the session XML and the genome to be used in IGV (see IGV for details on supported genomes).
+
+<<IGVsessionAndSample, eval=FALSE>>=
+
+MakeIGVSession(SampleSheet,FileSheet,igvdirectory=getwd(),"Example","mm9")
+@
+
+This creates two files in the current working directory containing the sample information file for IGV ("SampleMetadata.txt") and the session XML itself to be loaded into IGV ("Example.xml").
+
+
+\subsection{Creating a Tracktable HTML report}
+
+As well as producing session XMLs and sample information files, the \texttt{tracktables} package can produce HTML reports which contain metadata and methods to control IGV.
+
+The report structure is made of a main \textbf{Tracktables Experiment Report} which houses the metadata from the SampleSheet data-frame and links to open a sample's files in IGV (the sample's bigwig, bam or interval files). All sample files are associated with their relevant sample metadata and grouped together by their unique sample name. 
+
+When a sample has an interval file associated to it, the Tracktables Experiment Report also contains a link to a further sample specific  \textbf{Tracktables Interval Report}. This interval report contains a table of interval locations, any metadata associated with intervals and further links to focus IGV on an interval's genomic location. 
+
+<<maketracktable, eval=FALSE>>=
+  HTMLreport <- maketracktable(FileSheet,SampleSheet,
+                               "IGVExample.html",
+                               basedirectory=getwd(),
+                               "mm9")
+@
+
+In this example the \Rfunction{maketracktables()} function creates an HTML report "IGVExample.html" ( The Tracktable Experiment Report) in the current working directory alongside the relevant sample IGV session XMLs, The Tracktable Experiment Reports (named by SampleName) and the sample information file. The function also returns the XML doc to allow the user to add further customisation to the main report.
+
+Further configuration of the report can be achieved through the use of the \texttt{colourBy} and \texttt{bwScale} arguments passed to the \Rfunction{maketracktables()} function. The \texttt{colourBy} argument accepts a character argument corresponding to the metadata column by which samples will be coloured in IGV. The \texttt{bwScale} argument defines how bigwigs will be scaled in IGV. \texttt{bwScale} accepts either a character argument corresponding to supported scaling methods (currently only "autoscale") or a list of numeric values corresponding to the minimums and maximums of the data ranges for BigWig files displayed in IGV.
+<<maketracktable_WithColoursAndScales, eval=FALSE>>=
+bwRanges <- list(
+            c(0,20),c(0,2),c(0,10),c(0,2)
+            )
+  HTMLreport <- maketracktable(FileSheet,SampleSheet,
+                               "IGVExample.html",
+                               basedirectory=getwd(),
+                               "mm9",colourBy="Antibody",bwScale=bwRanges)
+@
+
+\section{Note on the use of relative paths}
+
+Since \texttt{tracktables} uses relative paths to communicate with IGV, in practice the creation of \texttt{tracktable}'s reports in a new directory, alongside any files to display, is advised. This allows for the report to be high portable and so delivered to the user as a functional unit to use with IGV.
+
+\section{Session Information}
+Here is the output of \Rfunction{sessionInfo} on the system on which
+this document was compiled:
+<<sessionInfo, results='asis', print=TRUE, eval=TRUE>>=
+toLatex(sessionInfo())
+@
+
+\end{document}

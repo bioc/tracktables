@@ -5,7 +5,7 @@
 \title{Make HTML pages for IGV sessions (Tracktables Experiment Report)}
 \usage{
 maketracktable(fileSheet, SampleSheet, filename, basedirectory, genome,
-  colourBy = NULL, bwScale = "autoscale")
+  colourBy = NULL, igvParams = igvParam())
 }
 \arguments{
 \item{fileSheet}{A data frame containing sample file locations (e.g. BigWig locations).}
@@ -20,7 +20,7 @@ maketracktable(fileSheet, SampleSheet, filename, basedirectory, genome,
 
 \item{colourBy}{Character defining which sample metadata to be used for colouring bigwig files}
 
-\item{bwScale}{Character or list of numeric vectors to define scaling type for bigwig. Default is "autoscale".
+\item{igvParams}{An object of class igvParam containing display parameters for IGV.
 When providing a list, this list must be same length as number of samples and each element have two numeric values corresponding to minimum
 and maximum value to be used in setting data range. Currently only "autoscale" or a list of minimum and maximum values are accepted.}
 }

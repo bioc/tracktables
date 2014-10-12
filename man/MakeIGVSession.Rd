@@ -5,7 +5,7 @@
 \title{Make IGV session XML and sample information file}
 \usage{
 MakeIGVSession(SampleSheet, fileSheet, igvdirectory, XMLname, genomeName,
-  locusName = "All", colourBy = NULL, bwScale = "autoscale")
+  locusName = "All", colourBy = NULL, igvParams = igvParam())
 }
 \arguments{
 \item{SampleSheet}{A data.frame object with metadata information for samples.
@@ -23,7 +23,7 @@ First column must contain unique sample ids.}
 
 \item{colourBy}{Character defining which sample metadata to be used for colouring bigwig files}
 
-\item{bwScale}{Character or list of numeric vectors to define scaling type for bigwig. Default is "autoscale".
+\item{igvParams}{An object of class igvParam containing display parameters for IGV.
 When providing a list, this list must be same length as number of samples and each element have two numeric values corresponding to minimum
 and maximum value to be used in setting data range. Currently only "autoscale" or a list of minimum and maximum values are accepted.}
 }

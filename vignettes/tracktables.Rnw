@@ -115,7 +115,7 @@ head(FileSheetEdited)
 
 Note that not all samples have intervals associated to them and ,here, none of these samples have BAM files associated to them. NA values within the FileSheet will be ignored by \texttt{tracktables} functions.
 
-\subsection{Creating an IGV session XML file}
+\subsection{Creating an IGV session}
 
 \texttt{tracktables} can create an IGV session XML and associated sample information file from this SampleSheet and FileSheet.
 
@@ -166,9 +166,140 @@ In this example, all files are colour grouped by their antibody metadata and dis
 
 
 
-\section{Note on the use of relative paths}
+\section{Using relative or absolute paths}
 
-Since \texttt{tracktables} uses relative paths to communicate with IGV, in practice the creation of \texttt{tracktable}'s reports in a new directory, alongside any files to display, is advised. This allows for the report to be high portable and so delivered to the user as a functional unit to use with IGV.
+\texttt{tracktables} allows for the use of both relative and absolute paths when creating IGV sessions and tracktables experiment reports with the \Rfunction{MakeIGVSession()}, \Rfunction{MakeIGVSessionXML()} and \Rfunction{maketracktable()} functions. The choice of relative or absolute paths for files and igv sessions is controlled by the use of \texttt{full.xml.paths} and \texttt{full.file.paths} arguments.
+
+\subsection{Creating a Tracktable HTML report using relative paths}
+In the examples in \textbf{Creating a Tracktable HTML report} and \textbf{Creating an IGV session} we have created a Tracktables Experiment Report and IGV session (XML and sample information files) using relative paths.
+
+This allows for the report to be independent of a stable FTP or HTTP address as well as being highly portable and available offline (once IGV has been installed locally). 
+
+These report and session files however require the sample and XML files to be maintained in the same relative path to the report itself. To take advantage of the portability of the report, it is recommended that the files to be used are copied to a directory within the report directory and the entire report directory transferred as a unit. 
+
+In this example, first a new directory ("IGVDirectory") is created in the current working directory and all the files are copied to it.
+
+<<maketracktable_relativePaths part1, eval=FALSE>>=
+
+library(tracktables)
+
+oldFileLocations <- system.file("extdata",package="tracktables")
+
+dir.create(file.path(getwd(),"IGVDirectory"),
+           showWarnings = FALSE,recursive = TRUE)
+file.copy(oldFileLocations,
+          file.path(getwd(),"IGVDirectory"),
+          recursive = TRUE)
+fileLocations <- file.path(getwd(),"IGVDirectory","extdata")
+@
+
+Next the samplesheet of metadata and filesheet of locations is created.
+<<maketracktable_relativePaths part2, eval=FALSE>>=
+
+bigwigs <- dir(fileLocations,pattern="*.bw",full.names=TRUE)
+intervals <- dir(fileLocations,pattern="*.bed",full.names=TRUE)
+bigWigMat <- cbind(gsub("_Example.bw","",basename(bigwigs)),
+                   bigwigs)
+intervalsMat <- cbind(gsub("_Peaks.bed","",basename(intervals)),
+                      intervals)
+
+FileSheet <- merge(bigWigMat,intervalsMat,all=TRUE)
+FileSheet <- as.matrix(cbind(FileSheet,NA))
+colnames(FileSheet) <- c("SampleName","bigwig","interval","bam")
+
+SampleSheet <- cbind(as.vector(FileSheet[,"SampleName"]),
+                     c("EBF","H3K4me3","H3K9ac","RNAPol2"),
+                     c("ProB","ProB","ProB","ProB"))
+colnames(SampleSheet) <- c("SampleName","Antibody","Species")
+@
+The tracktables report is created from a call to \texttt{maketracktable}. By default all paths are created relative the directory specified by \texttt{basedirectory}.
+
+<<maketracktable_relativePaths part3, eval=FALSE>>=
+
+HTMLreport <- maketracktable(fileSheet=FileSheet,
+                               SampleSheet=SampleSheet,
+                               filename="IGVEx3.html",
+                               basedirectory=file.path(getwd(),"IGVDirectory"),
+                               genome="mm9")
+@
+
+By default the report and all XML files will be created in the directory specified by \texttt{basedirectory} argument.  
+
+The directory "IGVdirectory" now contains the tracktables experiment and intervals reports, all the IGV XML and sample information files as well as the sample files within the "IGVdirectory/extdata" directory. 
+
+This directory can used as a highly portable, self-contained report independent of external dependencies e.g. availability of online storage, internet connection. 
+
+\subsection{Creating a Tracktable HTML report using absolute paths}
+
+When an FTP, HTTP or stable address to host sample and tracktables files is available, tracktables can be used to produce reports and xml files with absolute paths. This allows for the report itself to be hosted online or used locally while referencing files and links on the user defined ftp/http address.
+
+The \texttt{full.xml.paths} and \texttt{full.file.paths} functions control how paths are defined with tracktables report and for online storage of tracktables reports will be set to TRUE. The \texttt{basedirectory} argument is set to the URL files will be hosted at. All files will be written to the directory set by the \texttt{writedirectory} and should be copied to the URL directory set by \texttt{basedirectory} argument for the report to be functional.
+
+In this example, a github address, set by \texttt{basedirectory}, is used to host the reduced files and the \texttt{writedirectory} is set to the current working directory. The full.xml.paths, full.file.paths are set to TRUE so all files will be linked to to \texttt{basedirectory} by absolute paths.
+
+<<maketracktable_absolutePaths, eval=FALSE>>=
+
+urlForFiles  <- "https://github.com/ThomasCarroll/tracktables-Data/raw/master/"
+
+# This will link to data and XMLs placed in github earlier. 
+# In practice a dedicated FTP would be required for larger files.
+HTMLreport <- maketracktable(fileSheet=FileSheet,SampleSheet=SampleSheet,
+                               filename="IGVEx4.html",genome="mm9",
+                               basedirectory=urlForFiles,
+                               full.xml.paths=T,
+                               full.file.paths=T,
+                               writedirectory=file.path(getwd(),"IGVDirectory")
+                             )
+@
+
+All files will be created in the \texttt{writedirectory} and with the exception of the tracktables experiment report ("IGVExample.html"), should be copied to the \texttt{basedirectory} for the report to be functional. In this example, the URL already contains the files required.
+
+
+\subsection{Creating a Tracktable HTML report using absolute and relative paths}
+
+Often, the sample files of interest are located on a stable or public URL but the user does not have write access to this URL. In order to build tracktables reports, the user can create only the associated sample metadata and XML files locally and relative to the main report but keep absolute links to sample files such as bigWigs, bams and bed files hosted externally.
+
+The use of such hybrid reports allow for a tracktables report of publically hosted data with more lightweight and highly customisable sample metadata and XML files stored locally.
+
+In this report, the \texttt{full.xml.paths}  is set to false and all XML files and the sample information file will be written to the directory specified by \texttt{writedirectory}. 
+
+<<maketracktable_hybridPaths, eval=FALSE>>=
+
+# Example URL
+urlForFiles  <- "https://github.com/ThomasCarroll/tracktables-Data/raw/master/"
+
+HTMLreport <- maketracktable(fileSheet=FileSheet,SampleSheet=SampleSheet,
+                               filename="IGVEx5.html",genome="mm9",
+                               basedirectory=urlForFiles,
+                               full.xml.paths=F,
+                               full.file.paths=T,
+                               writedirectory=file.path(getwd(),"IGVDirectory")
+                             )
+@
+
+The IGVDirectory now contains a Tracktables Experiment Report and all required XML, html and sample information files with absolute path links to files hosted externally (or locally).
+
+\subsection{Creating a Tracktable HTML report from files across multiple hosts (multiple FTP/HTTP addresses)}
+
+The \texttt{use.path.asis} argument causes all links to sample files to be based on their original path in the fileSheet and so overrides the path set by \texttt{basedirectory} argument. This is useful when fileSheet listed files hosted on multiple systems/URLs as can be the case when pooling many publically hosted files.
+
+In this example a locally directory hosting all files will be used. This report then will be able to transferred across directories which can access the sample file locations through its full paths.
+
+To use the full paths to sample files as specified in the filesheet, the \texttt{use.path.asis} argument is set to true.
+<<maketracktable_asisPaths, eval=FALSE>>=
+urlForFiles  <- "https://github.com/ThomasCarroll/tracktables-Data/raw/master/"
+
+HTMLreport <- maketracktable(fileSheet=FileSheet,SampleSheet=SampleSheet,
+                               filename="IGVEx6.html",genome="mm9",
+                               basedirectory=urlForFiles,
+                               full.xml.paths=F,
+                               full.file.paths=T,
+                               writedirectory=file.path(getwd(),"IGVDirectory"),
+                               use.path.asis=T
+                             )
+
+@
+In this report, all sample file links are to the files' original locations. All IGV related files have been written to "IGVDirectory". The directory and its report are now self contained with dependencies on the files original locations.
 
 \section{Session Information}
 Here is the output of \Rfunction{sessionInfo} on the system on which

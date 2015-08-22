@@ -443,7 +443,7 @@ makebedtable <- function(grangesObject,name,basedirectory){
   tracktablesCSS <- readLines(system.file(package="tracktables","js","tracktables.css"))
   
   grangesFrame <- as.matrix(as.data.frame(grangesObject))
-  grangesFrame <- str_trim(grangesFrame)
+  grangesFrame <- apply(grangesFrame,2,str_trim)
   jsarray <- paste("[",paste0("[",apply(grangesFrame,1,function(x)paste0(c(shQuote(c(paste0("<a class=\"table\" href=\"http://localhost:60151/goto?locus=",x[1],":",x[2],"-",x[3],"\">IGV</a>"))),shQuote(x)),collapse=",")),"]",collapse=",\n"),"]")
   jsArrayForIGV <- paste0("var igvtable =",jsarray,";\n")
   jspart2 <- paste0(

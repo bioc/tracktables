@@ -84,6 +84,14 @@ MakeIGVSampleMetadata <- function(SampleSheet,fileSheet,igvdirectory){
 #' @param igvParams An object of class igvParam containing display parameters for IGV.
 #' When providing a list, this list must be same length as number of samples and each element have two numeric values corresponding to minimum 
 #' and maximum value to be used in setting data range. Currently only "autoscale" or a list of minimum and maximum values are accepted.
+#' @param writedirectory A character of the directory to which files will be written. Default is set
+#' to igvdirectory argument. 
+#' @param full.xml.paths Boolean of whether reference to XML and sample information files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param full.file.paths Boolean of whether reference to sample bigWig/Bam/interval files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param use.path.asis Boolean of whether paths to files in samplesheet should be used as is. 
+#' If TRUE overrides sample files paths specified by full.file.paths argument. Default is FALSE
 #' @return A character of file location for the IGV session XML 
 #' @examples
 #'  
@@ -108,16 +116,35 @@ MakeIGVSampleMetadata <- function(SampleSheet,fileSheet,igvdirectory){
 #' MakeIGVSessionXML(fileSheet,igvdirectory=getwd(),"Example","mm9")
 #' 
 #' @export
-MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=NULL,igvParams=igvParam()){
+MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusName="All",
+                              colourBy=NULL,igvParams=igvParam(),writedirectory=NULL,
+                              full.xml.paths=FALSE,full.file.paths=FALSE,use.path.asis=FALSE){
     i <- 1
+    if(is.null(writedirectory)){
+      writedirectory <- igvdirectory
+    }
     SampleSheet <- as.matrix(fileSheet)
     if(class(igvParams) == "igvParam"){
       igvParams <- rep(list(igvParams),nrow(fileSheet))
     }
-    Output <- file.path(igvdirectory,paste(XMLname,".xml",sep=""))
+    if(!full.xml.paths){
+      Output <- file.path(writedirectory,paste(XMLname,".xml",sep=""))
+    }else{
+      Output <- file.path(writedirectory,paste(XMLname,".xml",sep=""))
+    }
     GlobalNode <- newXMLNode("Global",attrs=c(genome.value=genomeName,groupTracksBy="Linking_id",locus=locusName,version=3))
     ResourcesNode <- newXMLNode("Resources",parent=GlobalNode)
-    MetaDataNode <- newXMLNode("Resource",parent=ResourcesNode,attrs=c(name="SampleMetadata",path=relativePath(file.path(igvdirectory,"SampleMetadata.txt"),Output),relativePath=TRUE))
+    if(full.xml.paths){
+      sampleMetadataPath <- file.path(igvdirectory,"SampleMetadata.txt")
+      relativePathSampleMetadataFlag <- "FALSE"
+    }else{      
+      sampleMetadataPath <- relativePath(file.path(igvdirectory,"SampleMetadata.txt"),Output)
+      relativePathSampleMetadataFlag <- "TRUE"
+      if(full.file.paths){
+        sampleMetadataPath <- relativePath(file.path(writedirectory,"SampleMetadata.txt"),Output)  
+      }
+    }
+    MetaDataNode <- newXMLNode("Resource",parent=ResourcesNode,attrs=c(name="SampleMetadata",path=sampleMetadataPath,relativePath=relativePathSampleMetadataFlag))
     PanelDataNode <- newXMLNode("Panel",attrs=c(height="350",name="DataPanel",width="1115"),parent=GlobalNode)
     bamFiles <- SampleSheet[,"bam"]
     bigwigFiles <- SampleSheet[,"bigwig"]
@@ -129,15 +156,26 @@ MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusNam
             colourIGVbigWig <- colourBy[i]
             colourIGVinterval <- colourBy[i]
         }else{
-            print(paste0(col2rgb(igvParams[[i]]@bigwig.color),collapse=","))
+            #print(paste0(col2rgb(igvParams[[i]]@bigwig.color),collapse=","))
             colourIGVbam <- paste0(col2rgb(igvParams[[i]]@bam.color),collapse=",")
             colourIGVbigWig <- paste0(col2rgb(igvParams[[i]]@bigwig.color),collapse=",")
             colourIGVinterval <- paste0(col2rgb(igvParams[[i]]@interval.color),collapse=",")              
         }
         if(!is.na(SampleSheet[i,"bam"])){
             NewName <- paste(SampleSheet[i,"SampleName"],"_Bam",sep="")
-            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=relativePath(bamFiles[i],Output),relativePath=TRUE))))
-            TrackNode <-  newXMLNode("Track",attrs=c(id=relativePath(bamFiles[i],Output),
+            if(full.file.paths){
+              bamFilePath <-  file.path(igvdirectory,basename(unname(bamFiles[i])))
+              relativePathBamFlag <- FALSE
+            }else{
+              bamFilePath <- relativePath(bamFiles[i],Output)
+              relativePathBamFlag <- TRUE
+            }
+            if(use.path.asis){
+              bamFilePath <- unname(bamFiles[i])
+              relativePathBamFlag <- FALSE              
+            }            
+            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=bamFilePath,relativePath=relativePathBamFlag))))
+            TrackNode <-  newXMLNode("Track",attrs=c(id=bamFilePath,
                                                      name=NewName,
                                                      showDataRange="true",
                                                      color=colourIGVbam,
@@ -162,9 +200,20 @@ MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusNam
         }
         if(!is.na(SampleSheet[i,"interval"])){
             NewName <- paste(SampleSheet[i,"SampleName"],"_Interval",sep="")
-            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=relativePath(intervalFiles[i],Output),relativePath=TRUE))))
+            if(full.file.paths){
+              intervalFilePath <- file.path(igvdirectory,basename(unname(intervalFiles[i])))
+              relativePathIntervalFlag <- FALSE
+            }else{
+              intervalFilePath <- relativePath(intervalFiles[i],Output)
+              relativePathIntervalFlag <- TRUE
+            }
+            if(use.path.asis){
+              intervalFilePath <- unname(intervalFiles[i])
+              relativePathIntervalFlag <- FALSE              
+            }
+            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=intervalFilePath,relativePath=relativePathIntervalFlag))))
             TrackNode <-  newXMLNode("Track",
-                                     attrs=c(id=relativePath(intervalFiles[i],Output),
+                                     attrs=c(id=intervalFilePath,
                                              name=NewName,
                                              altColor=paste0(col2rgb(igvParams[[i]]@interval.altColor),collapse=","),
                                              color=colourIGVinterval,
@@ -185,8 +234,19 @@ MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusNam
         if(!is.na(SampleSheet[i,"bigwig"])){
             
             NewName <- paste(SampleSheet[i,"SampleName"],"_Bigwig",sep="")
-            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=relativePath(bigwigFiles[i],Output),relativePath=TRUE))))
-            TrackNode <-  newXMLNode("Track",attrs=c(id=relativePath(bigwigFiles[i],Output),
+            if(full.file.paths){
+              bigWigFilePath <- file.path(igvdirectory,basename(unname(bigwigFiles[i])))
+              relativePathbigWigFlag <- FALSE
+            }else{
+              bigWigFilePath <- relativePath(bigwigFiles[i],Output)
+              relativePathbigWigFlag <- TRUE
+            }
+            if(use.path.asis){
+              bigWigFilePath <- unname(bigwigFiles[i])
+              relativePathbigWigFlag <- FALSE              
+            }             
+            resources <-  c(resources,list(newXMLNode("Resource",parent=ResourcesNode,attrs=c(label=NewName,name=NewName,path=bigWigFilePath,relativePath=relativePathbigWigFlag))))
+            TrackNode <-  newXMLNode("Track",attrs=c(id=bigWigFilePath,
                                                      name=NewName,
                                                      autoScale=igvParams[[i]]@bigwig.autoScale,
                                                      altColor=paste0(col2rgb(igvParams[[i]]@bigwig.altColor),collapse=","),
@@ -236,6 +296,14 @@ MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusNam
 #' @param igvParams An object of class igvParam containing display parameters for IGV.
 #' When providing a list, this list must be same length as number of samples and each element have two numeric values corresponding to minimum 
 #' and maximum value to be used in setting data range. Currently only "autoscale" or a list of minimum and maximum values are accepted.
+#' @param writedirectory A character of the directory to which files will be written. Default is set
+#' to igvdirectory argument. 
+#' @param full.xml.paths Boolean of whether reference to XML and sample information files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param full.file.paths Boolean of whether reference to sample bigWig/Bam/interval files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param use.path.asis Boolean of whether paths to files in samplesheet should be used as is. 
+#' If TRUE overrides sample files paths specified by full.file.paths argument. Default is FALSE
 #' @return An object containing XML document (HTMLInternalDocument,XMLInternalDocument,XMLAbstractDocument) 
 #' @examples
 #'  
@@ -268,10 +336,11 @@ MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusNam
 #'                                "mm9")
 #' 
 #' @export
-maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,colourBy=NULL,igvParams=igvParam()){
-    message("tracktables uses the Datatables javascript libraries.
+maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,colourBy=NULL,
+                           igvParams=igvParam(),writedirectory=NULL,
+                           full.xml.paths=FALSE,full.file.paths=FALSE,use.path.asis=FALSE){
+      message("tracktables uses the Datatables javascript libraries.
             For information on Datatables see http://datatables.net/")
-
     if(class(igvParams) == "igvParam"){
       igvParams <- rep(list(igvParams),nrow(fileSheet))
     }
@@ -283,7 +352,13 @@ maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,c
     }
     
     basedirectory <- gsub("/$","",basedirectory)
-    MakeIGVSampleMetadata(SampleSheet,fileSheet,basedirectory)
+    if(is.null(writedirectory)) writedirectory <- basedirectory
+    
+    if(!full.xml.paths){
+      MakeIGVSampleMetadata(SampleSheet,fileSheet,writedirectory)
+    }else{
+      MakeIGVSampleMetadata(SampleSheet,fileSheet,writedirectory)
+    }
     if(!is.null(colourBy)){
         nOfGroups <- length(unique(SampleSheet[,colourBy]))
         groupColours <- apply(t(col2rgb(brewer.pal(nOfGroups,"Set3"))),1,function(x)paste0(x,collapse=","))[factor(SampleSheet[,colourBy])]
@@ -295,7 +370,10 @@ maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,c
                           basedirectory,
                           paste0(fileSheet[x,1],"igv"),
                           genome,
-                          locusName="All",groupColours[x],igvParams[x])
+                          locusName="All",groupColours[x],igvParams[x],
+                          writedirectory=writedirectory,
+                          full.xml.paths=full.xml.paths,full.file.paths=full.file.paths,
+                          use.path.asis=use.path.asis)
         ))
   
     dataTableJS <- readLines(system.file(package="tracktables","js","datatables.js"))
@@ -304,30 +382,57 @@ maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,c
     dataTableScroller <- readLines(system.file(package="tracktables","js","dataTables.scroller.min.js"))
     tracktablesCSS <- readLines(system.file(package="tracktables","js","tracktables.css"))
 
-    
     giHTMLs <- vector("character",nrow(fileSheet))
     giHTMLLinks <- vector("character",nrow(fileSheet))
     for(l in 1:nrow(fileSheet)){
         if(!is.na(fileSheet[l,"interval"])){
-            giHTMLs[l] <- makebedtable(GetGRanges(as.vector(fileSheet[l,"interval"])),paste0(fileSheet[l,"SampleName"],"GI.html"),basedirectory)  
-            giHTMLLinks[l] <- paste0("\"<a class=\\\"table\\\" href=\\\"",file.path(basedirectory,basename(giHTMLs[l])),"\\\">Intervals</a>\"")
+            if(!full.xml.paths){
+            giHTMLs[l] <- makebedtable(GetGRanges(as.vector(fileSheet[l,"interval"])),paste0(fileSheet[l,"SampleName"],"GI.html"),writedirectory)  
+            htmlfile <- unlist(lapply(giHTMLs[l],function(x)relativePath(x, gsub("//","/",file.path(writedirectory,filename)))))
+            giHTMLLinks[l] <- paste0("\"<a class=\\\"table\\\" href=\\\"",
+                                     htmlfile,
+                                     "\\\">Intervals</a>\"")
+            }else{
+              giHTMLs[l] <- makebedtable(GetGRanges(as.vector(fileSheet[l,"interval"])),paste0(fileSheet[l,"SampleName"],"GI.html"),writedirectory)  
+              giHTMLLinks[l] <- paste0("\"<a class=\\\"table\\\" href=\\\"",file.path(basedirectory,basename(giHTMLs[l])),"\\\">Intervals</a>\"") 
+            }
     }else{
         giHTMLLinks[l] <- shQuote("No Intervals")
       
     }
   }
-  
-  files <- unlist(lapply(xmlFiles,function(x)relativePath(x,
-                                                          gsub("//","/",file.path(basedirectory,filename))
-  )))
-  t3mp <- "\"<a class=\\\"table\\\" href=\\\"http://localhost:60151/load?file=\".concat(dir.concat(\"/"
-  t4mp <- "\\\"\".concat(\""
-  t5mp <- "</a>\")))"
-  jsMat <- cbind(
-    matrix(paste0("\"",as.vector(SampleSheet),"\""),ncol=ncol(SampleSheet),byrow=FALSE),
-    paste0(t3mp,files,"&merge=true",t4mp,">",SampleSheet[,1],t5mp),
-    giHTMLLinks
-  )
+
+  if(!full.xml.paths){
+    if(full.file.paths){
+      message(paste0("full.file.paths is set to true,\nrelative paths will be created to XML from writedirectory: ",writedirectory))
+    files <- unlist(lapply(xmlFiles,function(x)relativePath(x,
+                                                            gsub("//","/",file.path(writedirectory,filename)))))
+                                                              
+    }else{
+    files <- unlist(lapply(xmlFiles,function(x)relativePath(x,
+                                                            gsub("//","/",file.path(basedirectory,filename)))))
+    }                                                        
+    t3mp <- "\"<a class=\\\"table\\\" href=\\\"http://localhost:60151/load?file=\".concat(dir.concat(\"/"
+    t4mp <- "\\\"\".concat(\""
+    t5mp <- "</a>\")))"
+    jsMat <- cbind(
+      matrix(paste0("\"",as.vector(SampleSheet),"\""),ncol=ncol(SampleSheet),byrow=FALSE),
+      paste0(t3mp,files,"&merge=true",t4mp,">",SampleSheet[,1],t5mp),
+      giHTMLLinks
+    )
+  }else{
+    files <- unlist(xmlFiles)
+    files <- file.path(basedirectory,basename(files))
+    t3mp <- "\"<a class=\\\"table\\\" href=\\\"http://localhost:60151/load?file="
+    t4mp <- ""
+    t5mp <- "</a>\""
+    jsMat <- cbind(
+      matrix(paste0("\"",as.vector(SampleSheet),"\""),ncol=ncol(SampleSheet),byrow=FALSE),
+      paste0(t3mp,files,"&merge=true\\\"",t4mp,">",SampleSheet[,1],t5mp),
+      giHTMLLinks
+    )
+    
+  }
   setigv <- paste0("var igvtable = [",paste0(
     "[",apply(jsMat,1,function(x)paste0(
       x,collapse=","))
@@ -409,8 +514,95 @@ maketracktable <- function(fileSheet,SampleSheet,filename,basedirectory,genome,c
   div2 <- newXMLNode("div",
                      attrs=c(id="demo"),
                      parent=section)
-  saveXML(doc,file=file.path(basedirectory,filename),doctype="html")
-  return(doc)
+  if(!full.xml.paths){
+    saveXML(doc,file=file.path(writedirectory,filename),doctype="html")
+  }else{
+    saveXML(doc,file=file.path(writedirectory,filename),doctype="html")
+  }
+  newdoc <- newXMLDoc(isHTML = T)
+  html <- newXMLNode("html",parent=newdoc)
+  div <- newXMLNode("head",
+                    parent=html)
+  #css <- newXMLNode("style",
+  #                  attrs=c("style type"="text/css","class"="init"),
+  #                          paste0(dataTableCSS,collapse=""),
+  #                  parent=div)
+  #tracktablescss <- newXMLNode("style",
+  #                             attrs=c("style type"="text/css","class"="init"),
+  #                                     paste0(tracktablesCSS,collapse=""),
+  #                             parent=div)  
+  #jqueryjs <- newXMLNode("script",
+  #                       attrs=c(type="text/javascript",language="javascript"),
+  #                               paste0(jqueryJS,collapse=""),
+  #                       parent=div)
+  #datatablejs <- newXMLNode("script",
+  #                          attrs=c(type="text/javascript",language="javascript"),
+  #                                  paste0(dataTableJS,collapse=""),
+  #                          parent=div)
+  #jspart1.2js <- newXMLNode("script",
+  #                          attrs=c(type="text/javascript",language="javascript"),
+  #                          paste0(jspart1.2,collapse=""),
+  #                          parent=div)
+  #div2 <- newXMLNode("body",
+  #                  parent=html)
+  #section <- newXMLNode("section",
+  #                      parent=div2)
+  #divtttext <- newXMLNode("div",
+  #                        attrs=c(id="tttext"),
+  #                        parent=section)
+
+  #ul1 <- newXMLNode("ul","",
+  #                  parent=divtttext)
+  #li1 <- newXMLNode("li","To take advantage of the integration with IGV, <b>IGV must be already running </b>on your machine or can be launched now from this <a class=\"main\" href=\"http://www.broadinstitute.org/igv/projects/current/igv.php\">webstart</a>.",
+  #                  parent=ul1,cdata=TRUE)
+  #div2 <- newXMLNode("div",
+  #                   attrs=c(id="demo"),
+  #                   parent=section)
+
+  css <- newXMLNode("link",
+                    attrs=c("rel"="stylesheet","type"="text/css",
+                            "href"="https://cdn.rawgit.com/ThomasCarroll/tracktables-Data/master/js/jquery.datatables.css"),
+                    parent=div)
+  tracktablescss <- newXMLNode("link",
+                               attrs=c("rel"="stylesheet","type"="text/css",
+                               "href"="https://cdn.rawgit.com/ThomasCarroll/tracktables-Data/master/js/tracktables.css"),
+                               parent=div)  
+  jqueryjs <- newXMLNode("script",
+                         attrs=c(type="text/javascript",language="javascript",
+                                "src"="https://cdn.rawgit.com/ThomasCarroll/tracktables-Data/master/js/jquery.min.js"),
+                         parent=div)
+  datatablejs <- newXMLNode("script",
+                            attrs=c(type="text/javascript",language="javascript",
+                            "src"="https://cdn.rawgit.com/ThomasCarroll/tracktables-Data/master/js/datatables.js"),
+                            parent=div)
+  jspart1.2js <- newXMLNode("script",
+                            attrs=c(type="text/javascript",language="javascript"),
+                            paste0(jspart1.2,collapse=""),
+                            parent=div)
+  div2 <- newXMLNode("body",
+                    parent=html)
+  section <- newXMLNode("section",
+                        parent=div2)
+  divtttext <- newXMLNode("div",
+                          attrs=c(id="tttext"),
+                          parent=section)
+  
+  ul1 <- newXMLNode("ul","",
+                    parent=divtttext)
+  li1 <- newXMLNode("li","To take advantage of the integration with IGV, <b>IGV must be already running </b>on your machine or can be launched now from this <a class=\"main\" href=\"http://www.broadinstitute.org/igv/projects/current/igv.php\">webstart</a>.",
+                    parent=ul1,cdata=TRUE)
+  div2 <- newXMLNode("div",
+                     attrs=c(id="demo"),
+                     parent=section)
+  
+  
+  return(
+    gsub("\\\\\"","'",
+      gsub("</body>|<body>|</html>|<html>|</head>|<head>","",
+              saveXML(newdoc))
+    )
+  )
+  
 }
 
 #' Make HTML pages for interval files or GRanges.
@@ -593,6 +785,14 @@ GetGRanges <- function(LoadFile,AllChr=NULL,ChrOfInterest=NULL,simple=FALSE,sepr
 #' @param igvParams An object of class igvParam containing display parameters for IGV.
 #' When providing a list, this list must be same length as number of samples and each element have two numeric values corresponding to minimum 
 #' and maximum value to be used in setting data range. Currently only "autoscale" or a list of minimum and maximum values are accepted.
+#' @param writedirectory A character of the directory to which files will be written. Default is set
+#' to igvdirectory argument. 
+#' @param full.xml.paths Boolean of whether reference to XML and sample information files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param full.file.paths Boolean of whether reference to sample bigWig/Bam/interval files should 
+#' be by relative or absolute paths. Default is FALSE
+#' @param use.path.asis Boolean of whether paths to files in samplesheet should be used as is. 
+#' If TRUE overrides sample files paths specified by full.file.paths argument. Default is FALSE
 #' @return A character of file location for the IGV session XML
 #' @examples
 #'  
@@ -622,7 +822,9 @@ GetGRanges <- function(LoadFile,AllChr=NULL,ChrOfInterest=NULL,simple=FALSE,sepr
 #' MakeIGVSession(SampleSheet,fileSheet,igvdirectory=getwd(),"Example","mm9")
 #' 
 #' @export
-MakeIGVSession <- function(SampleSheet,fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=NULL,igvParams=igvParam()){
+MakeIGVSession <- function(SampleSheet,fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=NULL,
+                           igvParams=igvParam(),writedirectory=NULL,full.xml.paths=FALSE,full.file.paths=FALSE,
+                           use.path.asis=FALSE){
   if(!is.null(colourBy)){
     nOfGroups <- length(unique(SampleSheet[,colourBy]))
     groupColours <- apply(t(col2rgb(brewer.pal(nOfGroups,"Set3"))),1,function(x)paste0(x,collapse=","))[factor(SampleSheet[,colourBy])]
@@ -631,7 +833,7 @@ MakeIGVSession <- function(SampleSheet,fileSheet,igvdirectory,XMLname,genomeName
   }
   
   MakeIGVSampleMetadata(SampleSheet,fileSheet,igvdirectory)
-  sessionxml <- MakeIGVSessionXML(fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=groupColours,igvParams=igvParams)  
+  sessionxml <- MakeIGVSessionXML(fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=groupColours,igvParams=igvParams,full.xml.paths=full.xml.paths,full.file.paths=full.file.paths,use.path.asis=use.path.asis)  
   return(sessionxml)
 }
 
@@ -993,6 +1195,5 @@ expandFileName <- function (fileName, base = getwd())
   
   return (fileName)
 }
-
 
 

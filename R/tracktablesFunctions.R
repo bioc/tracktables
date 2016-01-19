@@ -109,6 +109,8 @@ MakeIGVSampleMetadata <- function(SampleSheet,fileSheet,igvdirectory){
 #' 
 #' @export
 MakeIGVSessionXML <- function(fileSheet,igvdirectory,XMLname,genomeName,locusName="All",colourBy=NULL,igvParams=igvParam()){
+    library(ore) # work around issue in tractor.base which 
+                 # has been reported to its maintainer
     i <- 1
     SampleSheet <- as.matrix(fileSheet)
     if(class(igvParams) == "igvParam"){

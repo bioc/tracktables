@@ -1,7 +1,7 @@
 Package: tracktables
 Type: Package
 Title: Build IGV tracks and HTML reports
-Version: 1.6.0
+Version: 1.6.1
 Date: 2014-09-22
 Author: Tom Carroll, Sanjay Khadayate, Anne Pajon, Ziwei Liang
 Maintainer: Tom Carroll <tc.infomatics@gmail.com>
